@@ -497,7 +497,7 @@ document.getElementById("f-phone").addEventListener("input", function () {
   this.value = r;
 });
 (function () {
-  const SECTION_IDS = ["about", "tariffs", "reviews", "guide", "faq"];
+  const SECTION_IDS = ['about', 'tariffs', 'reviews', 'guide', 'faq'];
 
   const VERT = `
     attribute vec2 a_pos;
@@ -521,107 +521,86 @@ document.getElementById("f-phone").addEventListener("input", function () {
       vec3 purple = vec3(0.494, 0.231, 0.929);
       vec3 lime   = vec3(0.776, 1.0,   0.204);
       vec3 col = mix(purple, lime, k);
-      // тёмные провалы
       col *= smoothstep(0.0, 0.35, n) * 0.85 + 0.15;
       gl_FragColor = vec4(col, 1.0);
     }
   `;
 
   function createBg(section) {
-    section.style.position = "relative";
-    section.style.overflow = "hidden";
+    section.style.position = 'relative';
+    section.style.overflow = 'hidden';
 
-    const canvas = document.createElement("canvas");
-    canvas.className = "liquid-bg-canvas";
-    canvas.setAttribute("aria-hidden", "true");
+    const canvas = document.createElement('canvas');
+    canvas.className = 'liquid-bg-canvas';
+    canvas.setAttribute('aria-hidden', 'true');
     section.insertBefore(canvas, section.firstChild);
 
-    const gl =
-      canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
-    if (!gl) {
-      canvas.remove();
-      return;
-    }
+    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    if (!gl) { canvas.remove(); return; }
 
-    // compile
     function compile(type, src) {
       const s = gl.createShader(type);
-      gl.shaderSource(s, src);
-      gl.compileShader(s);
-      return s;
+      gl.shaderSource(s, src); gl.compileShader(s); return s;
     }
     const prog = gl.createProgram();
     gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERT));
     gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FRAG));
-    gl.linkProgram(prog);
-    gl.useProgram(prog);
+    gl.linkProgram(prog); gl.useProgram(prog);
 
     const buf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-    gl.bufferData(
-      gl.ARRAY_BUFFER,
-      new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]),
-      gl.STATIC_DRAW,
-    );
-    const loc = gl.getAttribLocation(prog, "a_pos");
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(prog, 'a_pos');
     gl.enableVertexAttribArray(loc);
     gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
 
-    const uT = gl.getUniformLocation(prog, "u_t");
-    const uRes = gl.getUniformLocation(prog, "u_res");
+    const uT   = gl.getUniformLocation(prog, 'u_t');
+    const uRes = gl.getUniformLocation(prog, 'u_res');
 
-    let animId = null,
-      visible = false,
-      t = 0;
+    let animId = null, visible = false;
+
+    // Используем реальное время вместо счётчика кадров —
+    // скорость одинакова и на телефоне и на компе
+    let startTime = null;
 
     function resize() {
-      canvas.width = section.offsetWidth || 800;
-      canvas.height = section.offsetHeight || 600;
+      // На мобильных снижаем разрешение canvas в 2 раза — меньше нагрузка
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const isMobile = window.innerWidth <= 768;
+      const scale = isMobile ? 0.5 : 1.0;
+      canvas.width  = (section.offsetWidth  || 800)  * scale;
+      canvas.height = (section.offsetHeight || 600) * scale;
       gl.viewport(0, 0, canvas.width, canvas.height);
     }
 
-    function draw() {
+    function draw(ts) {
+      if (!startTime) startTime = ts;
+      const t = (ts - startTime) * 0.001 * 0.8; // 0.8 = скорость, одинакова везде
+
       gl.uniform1f(uT, t);
       gl.uniform2f(uRes, canvas.width, canvas.height);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-      t += 0.012;
       animId = requestAnimationFrame(draw);
     }
 
-    function start() {
-      if (animId) return;
-      resize();
-      draw();
-    }
-    function stop() {
-      if (animId) {
-        cancelAnimationFrame(animId);
-        animId = null;
-      }
-    }
+    function start() { if (animId) return; resize(); animId = requestAnimationFrame(draw); }
+    function stop()  { if (animId) { cancelAnimationFrame(animId); animId = null; startTime = null; } }
 
-    new IntersectionObserver(
-      (es) => {
-        es[0].isIntersecting
-          ? ((visible = true), start())
-          : ((visible = false), stop());
-      },
-      { threshold: 0.01 },
-    ).observe(section);
+    new IntersectionObserver(es => {
+      es[0].isIntersecting ? (visible = true, start()) : (visible = false, stop());
+    }, { threshold: 0.01 }).observe(section);
 
-    new ResizeObserver(() => {
-      resize();
-    }).observe(section);
+    new ResizeObserver(() => { if (visible) resize(); }).observe(section);
   }
 
   function init() {
-    SECTION_IDS.forEach((id) => {
+    SECTION_IDS.forEach(id => {
       const el = document.getElementById(id);
       if (el) createBg(el);
     });
   }
 
-  document.readyState === "loading"
-    ? document.addEventListener("DOMContentLoaded", init)
+  document.readyState === 'loading'
+    ? document.addEventListener('DOMContentLoaded', init)
     : init();
 })();
