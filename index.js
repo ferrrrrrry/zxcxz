@@ -512,16 +512,29 @@ document.getElementById("f-phone").addEventListener("input", function () {
       vec2 uv = gl_FragCoord.xy / u_res;
       float x = uv.x * 6.0;
       float y = uv.y * 5.0;
-      float v = sin(x + u_t) * cos(y - u_t * 0.7)
-              + sin((x + y) * 1.3 + u_t * 0.5) * cos(x * 0.8 - y * 0.9 + u_t * 0.4)
-              + sin(x * 2.0 - u_t * 0.5) * cos(y * 1.8 + u_t * 0.3);
-      float n = (v + 3.0) / 6.0;
-      n = clamp(n, 0.0, 1.0);
-      float k = smoothstep(0.0, 1.0, n);
-      vec3 purple = vec3(0.494, 0.231, 0.929);
-      vec3 lime   = vec3(0.776, 1.0,   0.204);
-      vec3 col = mix(purple, lime, k);
-      col *= smoothstep(0.0, 0.35, n) * 0.85 + 0.15;
+      float v = sin(x * 0.011 * 90.0 + u_t * 0.9) * cos(y * 0.009 * 90.0 - u_t * 0.6)
+              + sin((x * 1.3 - y) * 0.007 * 90.0 + u_t * 0.5) * cos(x * 0.005 * 90.0 + y * 0.006 * 90.0 - u_t * 0.4)
+              + sin(x * 0.02 * 90.0 - u_t * 0.5) * cos(y * 0.018 * 90.0 + u_t * 0.3)
+              + cos(sqrt(x * x * 0.01 + y * y * 0.01) + u_t * 0.4);
+      float n = clamp((v + 4.0) / 8.0, 0.0, 1.0);
+      float vv = pow(n, 1.8);
+      vec3 col;
+      if (vv < 0.3) {
+        float k = vv / 0.3;
+        col = vec3(5.0/255.0 + 8.0/255.0 * k,
+                   2.0/255.0 + 4.0/255.0 * k,
+                   15.0/255.0 + 20.0/255.0 * k);
+      } else if (vv < 0.6) {
+        float k = (vv - 0.3) / 0.3;
+        col = vec3(13.0/255.0 + 0.494 * k,
+                   6.0/255.0  + 0.231 * k,
+                   35.0/255.0 + 0.847 * k);
+      } else {
+        float k = (vv - 0.6) / 0.4;
+        col = vec3(0.494 + (0.776 - 0.494) * k,
+                   0.231 + (1.0   - 0.231) * k,
+                   0.929 + (0.204 - 0.929) * k);
+      }
       gl_FragColor = vec4(col, 1.0);
     }
   `;
@@ -557,26 +570,19 @@ document.getElementById("f-phone").addEventListener("input", function () {
     const uT   = gl.getUniformLocation(prog, 'u_t');
     const uRes = gl.getUniformLocation(prog, 'u_res');
 
-    let animId = null, visible = false;
-
-    // Используем реальное время вместо счётчика кадров —
-    // скорость одинакова и на телефоне и на компе
-    let startTime = null;
+    let animId = null, visible = false, startTime = null;
 
     function resize() {
-      // На мобильных снижаем разрешение canvas в 2 раза — меньше нагрузка
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const isMobile = window.innerWidth <= 768;
       const scale = isMobile ? 0.5 : 1.0;
-      canvas.width  = (section.offsetWidth  || 800)  * scale;
+      canvas.width  = (section.offsetWidth  || 800) * scale;
       canvas.height = (section.offsetHeight || 600) * scale;
       gl.viewport(0, 0, canvas.width, canvas.height);
     }
 
     function draw(ts) {
       if (!startTime) startTime = ts;
-      const t = (ts - startTime) * 0.001 * 0.8; // 0.8 = скорость, одинакова везде
-
+      const t = (ts - startTime) * 0.001 * 0.7;
       gl.uniform1f(uT, t);
       gl.uniform2f(uRes, canvas.width, canvas.height);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
