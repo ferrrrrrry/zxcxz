@@ -497,54 +497,37 @@ document.getElementById("f-phone").addEventListener("input", function () {
   this.value = r;
 });
 (function () {
-  // Секции, на которых рисуем фон
   const SECTION_IDS = ["about", "tariffs", "reviews", "guide", "faq"];
 
-  // 5 волновых слоёв — от фиолетового к зелёному
-  const LAYERS = [
-    {
-      amp: 28,
-      freq: 0.006,
-      speed: 0.006,
-      yBase: 0.3,
-      col: "#7E3BED",
-      alpha: 0.18,
-    },
-    {
-      amp: 22,
-      freq: 0.007,
-      speed: 0.005,
-      yBase: 0.42,
-      col: "#9B6AF0",
-      alpha: 0.14,
-    },
-    {
-      amp: 24,
-      freq: 0.005,
-      speed: 0.004,
-      yBase: 0.54,
-      col: "#A87EE8",
-      alpha: 0.13,
-    },
-    {
-      amp: 18,
-      freq: 0.008,
-      speed: 0.007,
-      yBase: 0.66,
-      col: "#C6FF34",
-      alpha: 0.12,
-    },
-    {
-      amp: 14,
-      freq: 0.009,
-      speed: 0.005,
-      yBase: 0.78,
-      col: "#D4FF6A",
-      alpha: 0.1,
-    },
-  ];
+  const VERT = `
+    attribute vec2 a_pos;
+    void main() { gl_Position = vec4(a_pos, 0, 1); }
+  `;
 
-  function createLiquidBg(section) {
+  const FRAG = `
+    precision mediump float;
+    uniform float u_t;
+    uniform vec2  u_res;
+    void main() {
+      vec2 uv = gl_FragCoord.xy / u_res;
+      float x = uv.x * 6.0;
+      float y = uv.y * 5.0;
+      float v = sin(x + u_t) * cos(y - u_t * 0.7)
+              + sin((x + y) * 1.3 + u_t * 0.5) * cos(x * 0.8 - y * 0.9 + u_t * 0.4)
+              + sin(x * 2.0 - u_t * 0.5) * cos(y * 1.8 + u_t * 0.3);
+      float n = (v + 3.0) / 6.0;
+      n = clamp(n, 0.0, 1.0);
+      float k = smoothstep(0.0, 1.0, n);
+      vec3 purple = vec3(0.494, 0.231, 0.929);
+      vec3 lime   = vec3(0.776, 1.0,   0.204);
+      vec3 col = mix(purple, lime, k);
+      // тёмные провалы
+      col *= smoothstep(0.0, 0.35, n) * 0.85 + 0.15;
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `;
+
+  function createBg(section) {
     section.style.position = "relative";
     section.style.overflow = "hidden";
 
@@ -553,65 +536,62 @@ document.getElementById("f-phone").addEventListener("input", function () {
     canvas.setAttribute("aria-hidden", "true");
     section.insertBefore(canvas, section.firstChild);
 
-    let W,
-      H,
-      t = 0,
-      animId = null,
-      visible = false;
-
-    function resize() {
-      W = canvas.width = section.offsetWidth || 800;
-      H = canvas.height = section.offsetHeight || 600;
+    const gl =
+      canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+    if (!gl) {
+      canvas.remove();
+      return;
     }
 
-    function drawFrame() {
-      const ctx = canvas.getContext("2d");
-      ctx.clearRect(0, 0, W, H);
+    // compile
+    function compile(type, src) {
+      const s = gl.createShader(type);
+      gl.shaderSource(s, src);
+      gl.compileShader(s);
+      return s;
+    }
+    const prog = gl.createProgram();
+    gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERT));
+    gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FRAG));
+    gl.linkProgram(prog);
+    gl.useProgram(prog);
 
-      LAYERS.forEach((l) => {
-        // заливка волны
-        ctx.beginPath();
-        for (let x = 0; x <= W; x += 3) {
-          const y =
-            l.yBase * H +
-            Math.sin(x * l.freq + t * l.speed * 60) * l.amp +
-            Math.sin(x * l.freq * 0.5 - t * l.speed * 40) * l.amp * 0.4;
-          x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-        }
-        ctx.lineTo(W, H);
-        ctx.lineTo(0, H);
-        ctx.closePath();
-        const hex = Math.round(l.alpha * 255)
-          .toString(16)
-          .padStart(2, "0");
-        ctx.fillStyle = l.col + hex;
-        ctx.fill();
+    const buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]),
+      gl.STATIC_DRAW,
+    );
+    const loc = gl.getAttribLocation(prog, "a_pos");
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
 
-        // линия гребня
-        ctx.beginPath();
-        for (let x = 0; x <= W; x += 3) {
-          const y =
-            l.yBase * H +
-            Math.sin(x * l.freq + t * l.speed * 60) * l.amp +
-            Math.sin(x * l.freq * 0.5 - t * l.speed * 40) * l.amp * 0.4;
-          x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-        }
-        const lineHex = Math.round(Math.min(l.alpha + 0.28, 1) * 255)
-          .toString(16)
-          .padStart(2, "0");
-        ctx.strokeStyle = l.col + lineHex;
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-      });
+    const uT = gl.getUniformLocation(prog, "u_t");
+    const uRes = gl.getUniformLocation(prog, "u_res");
 
-      t += 0.016;
-      animId = requestAnimationFrame(drawFrame);
+    let animId = null,
+      visible = false,
+      t = 0;
+
+    function resize() {
+      canvas.width = section.offsetWidth || 800;
+      canvas.height = section.offsetHeight || 600;
+      gl.viewport(0, 0, canvas.width, canvas.height);
+    }
+
+    function draw() {
+      gl.uniform1f(uT, t);
+      gl.uniform2f(uRes, canvas.width, canvas.height);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      t += 0.012;
+      animId = requestAnimationFrame(draw);
     }
 
     function start() {
       if (animId) return;
       resize();
-      drawFrame();
+      draw();
     }
     function stop() {
       if (animId) {
@@ -620,46 +600,28 @@ document.getElementById("f-phone").addEventListener("input", function () {
       }
     }
 
-    // Запускаем только когда секция в viewport
-    const obs = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => {
-          if (e.isIntersecting) {
-            visible = true;
-            start();
-          } else {
-            visible = false;
-            stop();
-          }
-        });
+    new IntersectionObserver(
+      (es) => {
+        es[0].isIntersecting
+          ? ((visible = true), start())
+          : ((visible = false), stop());
       },
       { threshold: 0.01 },
-    );
-    obs.observe(section);
+    ).observe(section);
 
-    // Обновляем размер при ресайзе
-    const ro = new ResizeObserver(() => {
-      if (visible) {
-        stop();
-        resize();
-        drawFrame();
-      } else {
-        resize();
-      }
-    });
-    ro.observe(section);
+    new ResizeObserver(() => {
+      resize();
+    }).observe(section);
   }
 
   function init() {
     SECTION_IDS.forEach((id) => {
       const el = document.getElementById(id);
-      if (el) createLiquidBg(el);
+      if (el) createBg(el);
     });
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
-  } else {
-    init();
-  }
+  document.readyState === "loading"
+    ? document.addEventListener("DOMContentLoaded", init)
+    : init();
 })();

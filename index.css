@@ -2476,11 +2476,10 @@ footer {
   height: 100%;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.38; /* прозрачность — меняй от 0.2 до 0.6 по вкусу */
-  mix-blend-mode: screen; /* screen = накладывается поверх тёмного фона красиво */
+  opacity: 0.55;
 }
 
-/* Перекрываем canvas под .graphs-section чёрным блоком */
+/* Убираем анимацию с секции графиков */
 #shops .graphs-section {
   position: relative;
   z-index: 1;
@@ -2495,7 +2494,7 @@ footer {
   pointer-events: none;
 }
 
-/* Всё содержимое секций должно быть поверх canvas */
+/* Всё содержимое секций поверх canvas */
 #about > *:not(.liquid-bg-canvas),
 #tariffs > *:not(.liquid-bg-canvas),
 #shops > *:not(.liquid-bg-canvas),
